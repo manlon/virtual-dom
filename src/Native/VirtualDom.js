@@ -242,12 +242,20 @@ function renderer(parent, tagger, initialVirtualNode)
 {
 	var eventNode = { tagger: tagger, parent: null };
 
-	var domNode = render(initialVirtualNode, eventNode);
-	parent.appendChild(domNode);
-
+	var domNode = parent.children[0];
 	var state = 'NO_REQUEST';
-	var currentVirtualNode = initialVirtualNode;
-	var nextVirtualNode = initialVirtualNode;
+	var currentVirtualNode;
+	var nextVirtualNode;
+
+	if (domNode) {
+		currentVirtualNode = extractVirtualNode(domNode);
+		registerVirtualNode(initialVirtualNode);
+	} else {
+		domNode = render(initialVirtualNode, eventNode);
+		parent.appendChild(domNode);
+		currentVirtualNode = initialVirtualNode;
+		nextVirtualNode = initialVirtualNode;
+	}
 
 	function registerVirtualNode(vNode)
 	{
@@ -985,6 +993,87 @@ function redraw(domNode, vNode, eventNode)
 	return newNode;
 }
 
+
+////////////  EXTRACT  ////////////
+
+
+function extractVirtualNode(domNode){
+
+	var tag = domNode.tagName.toLowerCase();
+	var facts = extractFacts(domNode);
+	var children = [];
+	var descendantsCount = 0;
+
+	for(var i = 0; i < domNode.childNodes.length; i++){
+		var childDomNode = domNode.childNodes[i];
+		var childVNode;
+		descendantsCount++;
+		if(childDomNode.nodeType == Node.TEXT_NODE){
+			childVNode = text(childDomNode.nodeValue);
+		}else{
+			childVNode = extractVirtualNode(childDomNode);
+			descendantsCount += childVNode.descendantsCount;
+		}
+		children.push(childVNode);
+	}
+
+	return {
+		type: 'node',
+		tag: tag,
+		facts: facts,
+		children: children,
+		namespace: facts.namespace,
+		descendantsCount: descendantsCount
+	};
+}
+
+function extractFacts(domNode){
+	var facts = {};
+	var style = extractStyle(domNode);
+	var attrs = extractAttributes(domNode);
+
+	if (style) {
+		facts[STYLE_KEY] = style;
+	}
+	if (attrs) {
+		facts[ATTR_KEY] = attrs;
+	}
+	if (domNode.value) {
+		facts['value'] = domNode.value;
+	}
+	return facts;
+}
+
+function extractStyle(domNode) {
+	var cssText = domNode.style.cssText;
+	if (cssText) {
+		var style = {};
+		var rules = cssText.split(";");
+		for (var i = 0; i < rules.length; i++) {
+			var rule = rules[i] && rules[i].split(":");
+			if (rule) {
+				style[rule[0]] = rule[1].trim();
+			}
+		}
+		return style;
+	}
+}
+
+function extractAttributes(domNode) {
+	var numAttrs = domNode.attributes.length;
+	if(numAttrs) {
+		var domAttributes = domNode.attributes;
+		var attrs;
+		for(var i = 0; i < numAttrs; i++){
+			var item = domAttributes.item(i);
+			if (item.name != 'style'){
+				attrs = attrs || {};
+				attrs[item.name] = item.value;
+			}
+		}
+		return attrs;
+	}
+}
 
 
 ////////////  PROGRAMS  ////////////
