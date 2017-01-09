@@ -1,12 +1,13 @@
 module VirtualDom exposing
   ( Node
   , text, node
-  , Property, property, attribute, attributeNS
+  , Property, property, attribute, attributeNS, mapProperty
   , style
   , on, onWithOptions, Options, defaultOptions
   , map
   , lazy, lazy2, lazy3
-  , programWithFlags
+  , keyedNode
+  , program, programWithFlags
   )
 
 {-| API to the core diffing algorithm. Can serve as a foundation for libraries
@@ -16,7 +17,7 @@ that expose more helper functions for HTML or SVG.
 @docs Node, text, node
 
 # Declare Properties and Attributes
-@docs Property, property, attribute, attributeNS
+@docs Property, property, attribute, attributeNS, mapProperty
 
 # Styles
 @docs style
@@ -28,15 +29,16 @@ that expose more helper functions for HTML or SVG.
 @docs map
 
 # Optimizations
-@docs lazy, lazy2, lazy3
+@docs lazy, lazy2, lazy3, keyedNode
 
 # Programs
-@docs programWithFlags
+@docs program, programWithFlags
 
 -}
 
 import Json.Decode as Json
 import Native.VirtualDom
+import VirtualDom.Debug as Debug
 
 
 {-| An immutable chunk of data representing a DOM node. This can be HTML or SVG.
@@ -169,6 +171,13 @@ attributeNS =
   Native.VirtualDom.attributeNS
 
 
+{-| Transform the messages produced by a `Property`.
+-}
+mapProperty : (a -> b) -> Property a -> Property b
+mapProperty =
+  Native.VirtualDom.mapProperty
+
+
 {-| Specify a list of styles.
 
     myStyle : Property msg
@@ -275,16 +284,40 @@ lazy3 =
   Native.VirtualDom.lazy3
 
 
+{-| Works just like `node`, but you add a unique identifier to each child
+node. You want this when you have a list of nodes that is changing: adding
+nodes, removing nodes, etc. In these cases, the unique identifiers help make
+the DOM modifications more efficient.
+-}
+keyedNode : String -> List (Property msg) -> List ( String, Node msg ) -> Node msg
+keyedNode =
+  Native.VirtualDom.keyedNode
+
+
 
 -- PROGRAMS
 
 
-{-| The most generic way to create a [`Program`][program]. It is the primitive
-behind things like `beginnerProgram` and `program` in [the `Html.App` module][app].
-Read about it there if you'd like to learn more about this.
+{-| Check out the docs for [`Html.App.program`][prog].
+It works exactly the same way.
 
-[program]: http://package.elm-lang.org/packages/elm-lang/core/latest/Platform#Program
-[app]: http://package.elm-lang.org/packages/elm-lang/html/latest/Html-App
+[prog]: http://package.elm-lang.org/packages/elm-lang/html/latest/Html-App#program
+-}
+program
+  : { init : (model, Cmd msg)
+    , update : msg -> model -> (model, Cmd msg)
+    , subscriptions : model -> Sub msg
+    , view : model -> Node msg
+    }
+  -> Program Never model msg
+program impl =
+  Native.VirtualDom.program Debug.wrap impl
+
+
+{-| Check out the docs for [`Html.App.programWithFlags`][prog].
+It works exactly the same way.
+
+[prog]: http://package.elm-lang.org/packages/elm-lang/html/latest/Html-App#programWithFlags
 -}
 programWithFlags
   : { init : flags -> (model, Cmd msg)
@@ -292,7 +325,7 @@ programWithFlags
     , subscriptions : model -> Sub msg
     , view : model -> Node msg
     }
-  -> Program flags
-programWithFlags =
-  Native.VirtualDom.programWithFlags
+  -> Program flags model msg
+programWithFlags impl =
+  Native.VirtualDom.programWithFlags Debug.wrapWithFlags impl
 
